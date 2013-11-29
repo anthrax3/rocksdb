@@ -9,8 +9,8 @@ INSTALL_PATH ?= $(CURDIR)
 # Uncomment exactly one of the lines labelled (A), (B), and (C) below
 # to switch between compilation modes.
 
-# OPT ?= -DNDEBUG     # (A) Production use (optimized mode)
-OPT += -O2 -fno-omit-frame-pointer -momit-leaf-frame-pointer
+OPT ?= -O2 -fno-omit-frame-pointer -momit-leaf-frame-pointer -DNDEBUG     # (A) Production use (optimized mode)
+#OPT += -O2 -fno-omit-frame-pointer -momit-leaf-frame-pointer
 #-----------------------------------------------
 
 # detect what platform we're building on
@@ -91,7 +91,10 @@ TOOLS = \
 	blob_store_bench
 
 PROGRAMS = db_bench signal_test $(TESTS) $(TOOLS)
-BENCHMARKS = db_bench_sqlite3 db_bench_tree_db table_reader_bench
+BENCHMARKS = db_bench_sqlite3	\
+	db_bench_tree_db	\
+	db_bench_wiredtiger	\
+	table_reader_bench
 
 # The library name is configurable since we are maintaining libraries of both
 # debug/release mode.
@@ -217,6 +220,9 @@ db_bench_sqlite3: doc/bench/db_bench_sqlite3.o $(LIBOBJECTS) $(TESTUTIL)
 
 db_bench_tree_db: doc/bench/db_bench_tree_db.o $(LIBOBJECTS) $(TESTUTIL)
 	$(CXX) doc/bench/db_bench_tree_db.o $(LIBOBJECTS) $(TESTUTIL) $(EXEC_LDFLAGS) -o $@ $(LDFLAGS) -lkyotocabinet $(COVERAGEFLAGS)
+
+db_bench_wiredtiger: doc/bench/db_bench_wiredtiger.o $(LIBOBJECTS) $(TESTUTIL)
+	$(CXX) doc/bench/db_bench_wiredtiger.o $(LIBOBJECTS) $(TESTUTIL) $(EXEC_LDFLAGS) -o $@ $(LDFLAGS) -lwiredtiger $(COVERAGEFLAGS)
 
 signal_test: util/signal_test.o $(LIBOBJECTS)
 	$(CXX) util/signal_test.o $(LIBOBJECTS) $(EXEC_LDFLAGS) -o $@ $(LDFLAGS) $(COVERAGEFLAGS)
