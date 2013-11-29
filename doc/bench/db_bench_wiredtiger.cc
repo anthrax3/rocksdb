@@ -1040,6 +1040,10 @@ class Benchmark {
         RunBenchmark(num_threads, name, method);
       }
     }
+    if (conn_ != NULL) {
+      conn_->close(conn_, NULL);
+      conn_ = NULL;
+    }
     if (FLAGS_statistics) {
      fprintf(stdout, "STATISTICS:\n%s\n", "TODO: dump WiredTiger stats");
     }
@@ -1582,6 +1586,7 @@ class Benchmark {
       }
       i += entries_per_batch_;
     }
+
     cursor->close(cursor);
     thread->stats.AddBytes(bytes);
   }
@@ -1711,8 +1716,6 @@ class Benchmark {
         cursor->set_key(cursor, key);
         if (cursor->search(cursor) == 0)
          found++;
-        else
-          fprintf(stderr, "Read failed to find key: %s\n", key);
         if (found && FLAGS_read_range > 1) {
           if (FLAGS_get_approx)
             fprintf(stderr, "Warning: WiredTiger skipping get_approx\n");
