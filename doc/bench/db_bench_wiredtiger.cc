@@ -1426,8 +1426,10 @@ class Benchmark {
       table_config << ",lsm_merge_max=5";
       if (FLAGS_bloom_bits > 0)
         table_config << ",lsm_bloom_bit_count=" << FLAGS_bloom_bits;
-        if (FLAGS_bloom_bits > 4)
-          table_config << ",lsm_bloom_hash_count=" << FLAGS_bloom_bits / 2;
+      if (FLAGS_bloom_bits > 4)
+        table_config << ",lsm_bloom_hash_count=" << FLAGS_bloom_bits / 2;
+      table_config << ",leaf_page_max=16kb";
+      table_config << ",leaf_item_max=2kb";
     }
     if (FLAGS_target_file_size_base)
       table_config << ",lsm_chunk_size=" << FLAGS_target_file_size_base;
