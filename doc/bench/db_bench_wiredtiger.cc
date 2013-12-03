@@ -404,6 +404,9 @@ DEFINE_bool(filter_deletes, false, " On true, deletes use bloom-filter and drop"
 // WiredTiger specific configuration options.
 DEFINE_bool(use_lsm, true, "Create LSM trees, not btrees");
 
+DEFINE_int32(max_compact_wait, 1200,
+             "Maximum amount of time to allow LSM trees to settle.");
+
 DEFINE_string(wiredtiger_open_config, "",
               "Additional configuration options for WiredTiger open.");
 
@@ -2508,10 +2511,10 @@ class Benchmark {
     /* Don't bother waiting if there were no LSM trees. */
     if (lsm_cursor_count != 0) {
       fprintf(stderr,
-        "Allowing LSM tree to be merged. Can take up to 20 minutes.\n");
+        "Allowing LSM tree to be merged. Can take up to %d seconds.\n",
+        FLAGS_max_compact_wait);
 #define COMPACT_STAT_WAIT_TIME  15
-#define COMPACT_MAX_MERGE_TIME  1200
-      int intervals_left = COMPACT_MAX_MERGE_TIME / COMPACT_STAT_WAIT_TIME;
+      int intervals_left = FLAGS_max_compact_wait / COMPACT_STAT_WAIT_TIME;
       const char *desc, *pvalue;
       uint64_t value;
       // Track statistics, to so we can tell that merges are happening.
