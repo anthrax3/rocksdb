@@ -1425,20 +1425,23 @@ class Benchmark {
     if (FLAGS_use_lsm) {
       table_config << ",type=lsm";
       table_config << ",prefix_compression=false";
-      table_config << ",lsm_chunk_size=20MB";
-      table_config << ",lsm_merge_max=5";
-      if (FLAGS_bloom_bits > 0)
-        table_config << ",lsm_bloom_bit_count=" << FLAGS_bloom_bits;
-      if (FLAGS_bloom_bits > 4)
-        table_config << ",lsm_bloom_hash_count=" << FLAGS_bloom_bits / 2;
       table_config << ",leaf_page_max=16kb";
       table_config << ",leaf_item_max=2kb";
+      table_config << ",lsm=(";
+      table_config << "chunk_size=20MB";
+      table_config << ",merge_max=5";
+      table_config << ",chunk_max=2TB";
+      if (FLAGS_bloom_bits > 0)
+        table_config << ",bloom_bit_count=" << FLAGS_bloom_bits;
+      if (FLAGS_bloom_bits > 4)
+        table_config << ",bloom_hash_count=" << FLAGS_bloom_bits / 2;
+      if (FLAGS_target_file_size_base)
+        table_config << ",chunk_size=" << FLAGS_target_file_size_base;
+      if (FLAGS_max_background_compactions)
+        table_config <<
+          ",merge_threads=" << FLAGS_max_background_compactions;
+      table_config << ")"; // close LSM configuration group.
     }
-    if (FLAGS_target_file_size_base)
-      table_config << ",lsm_chunk_size=" << FLAGS_target_file_size_base;
-    if (FLAGS_max_background_compactions)
-      table_config <<
-        ",lsm_merge_threads=" << FLAGS_max_background_compactions;
 
     // Add user configuration to the end - so it overrides other values.
     config << "," << FLAGS_wiredtiger_open_config;
