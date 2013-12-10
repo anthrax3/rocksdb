@@ -1429,8 +1429,7 @@ class Benchmark {
       table_config << ",leaf_item_max=2kb";
       table_config << ",lsm=(";
       table_config << "chunk_size=20MB";
-      table_config << ",merge_max=5";
-      table_config << ",chunk_max=2TB";
+      table_config << ",chunk_max=100GB";
       if (FLAGS_bloom_bits > 0)
         table_config << ",bloom_bit_count=" << FLAGS_bloom_bits;
       if (FLAGS_bloom_bits > 4)
