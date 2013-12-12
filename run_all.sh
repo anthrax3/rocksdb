@@ -1,18 +1,19 @@
 #!/bin/bash
 
-DATA_DIR="/ssd1/scratch/wiredtiger/results"
-OPCOUNT=100000000
-READCOUNT=1000000
+DATA_DIR="results"
+OPCOUNT=5000000
+READCOUNT=200000
 DATA_SIZE=200
 ENGINE="wt"
 if [ "x$ENGINE" == "xwt" ]; then
 	BENCHMARK=./runners/wrun_
 	OUTDIR_PREFIX=wt
-else
-	echo "Error only WiredTiger engine supported by script"
-	exit 1
+elif [ "x$ENGINE" == "xrocks" ]; then
 	BENCHMARK=./runners/rrun_
 	OUTDIR_PREFIX=rocks
+else
+	echo "Error unsupported engine $ENGINE"
+	exit 1
 fi
 
 OUTDIR_BASE=bench
@@ -61,12 +62,14 @@ ${BENCHMARK}fillseq.sh						\
 if [ "x$ENGINE" == "xwt" ]; then
 	CHUNK_COUNT=`ls -l $DATA_DIR/*lsm | wc -l`
 	echo "LSM chunks: $CHUNK_COUNT" >> $OUTDIR/fillseq.out
-fi
 
-echo "Run compact in preparation for overwrite phase"
-${BENCHMARK}compact.sh						\
-	-i $OPCOUNT -d $DATA_DIR -r $READCOUNT -s $DATA_SIZE	\
-	> /dev/null 2>&1 || exit 1
+	# WiredTiger deserves a compact here - RocksDB artifically loads
+	# data into a single level when doing fillseq.
+	echo "Run compact in preparation for overwrite phase"
+	${BENCHMARK}compact.sh						\
+		-i $OPCOUNT -d $DATA_DIR -r $READCOUNT -s $DATA_SIZE	\
+		> /dev/null 2>&1 || exit 1
+fi
 
 echo "Run overwrite"
 if [ "x$ENGINE" == "xwt" ]; then

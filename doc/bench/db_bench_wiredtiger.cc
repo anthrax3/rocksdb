@@ -2464,6 +2464,51 @@ class Benchmark {
   }
 
   void Compact(ThreadState* thread) {
+#if 1
+    /*
+     * TODO: It probably makes sense to run multiple compacts in parallel
+     * if there are multiple LSM trees. The code to do that involves
+     * opening multiple session handles (and possibly multiple threads), so
+     * don't do that for now.
+     */
+    WT_CURSOR *md_cursor;
+    int exact, ret;
+    const char *key;
+    char buf[100]; // For the timeout.
+
+    if (!FLAGS_use_lsm)
+      return ;
+
+    if ((ret = thread->session->open_cursor(
+      thread->session, "metadata:", NULL, NULL, &md_cursor)) != 0) {
+      fprintf(stderr, "open_cursor error: %s\n", wiredtiger_strerror(ret));
+      exit(1);
+    }
+    md_cursor->set_key(md_cursor, "lsm:");
+    for (ret = md_cursor->search_near(md_cursor, &exact);
+      ret == 0; ret = md_cursor->next(md_cursor)) {
+      /* If the initial search result is behind, move our cursor forwards */
+      if (exact == -1) {
+        ret = md_cursor->next(md_cursor);
+        exact = 1;
+      }
+      ret = md_cursor->get_key(md_cursor, &key);
+      if (ret != 0 || strncmp(key, "lsm:", 4) != 0)
+        break;
+
+      // TODO: track how long we've been waiting if there are multiple
+      // LSM trees to compact.
+      snprintf(buf, 100, "timeout=%d", FLAGS_max_compact_wait);
+      // Run a compact on this LSM.
+      if ((ret = thread->session->compact(thread->session, key, buf)) != 0 &&
+        ret != ETIMEDOUT) {
+        fprintf(stderr, "compact error: %s\n", wiredtiger_strerror(ret));
+        exit(1);
+      }
+    }
+    md_cursor->close(md_cursor);
+
+#else
     WT_CURSOR **lsm_cursors, *md_cursor, *stat_cursor;
     int allocated_cursors, exact, i, lsm_cursor_count, ret;
     const char *key;
@@ -2555,6 +2600,7 @@ class Benchmark {
     for (i = 0; i < lsm_cursor_count; i++)
       lsm_cursors[i]->close(lsm_cursors[i]);
     free(lsm_cursors);
+#endif
   }
 
   void PrintStats(const char* key) {

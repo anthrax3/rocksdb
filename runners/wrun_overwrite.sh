@@ -38,7 +38,7 @@ while getopts "h?d:i:r:s:" opt; do
     esac
 done
 
-echo "Overwriting the 1B keys in database in random order...."
-( set -x ; ./db_bench_wiredtiger --benchmarks=overwrite --mmap_read=0 --statistics=1 --histogram=1 --num=$opcount --threads=$threadcount --value_size=$vs --block_size=$bs --cache_size=$cs --bloom_bits=10 --verify_checksum=1 --db=$data_dir --sync=$sync --disable_wal=1 --compression_type=snappy --stats_interval=$si --disable_data_sync=$dds --target_file_size_base=$mb --stats_per_interval=1 --use_existing_db=1 )
+echo "Overwriting keys in database in random order...."
+( set -x ; ./db_bench_wiredtiger --benchmarks=overwrite --mmap_read=0 --statistics=1 --histogram=1 --num=$opcount --threads=$threadcount --value_size=$vs --block_size=$bs --cache_size=$cs --bloom_bits=10 --verify_checksum=1 --db=$data_dir --sync=$sync --disable_wal=$disable_wal --compression_type=snappy --stats_interval=$si --disable_data_sync=$dds --target_file_size_base=$mb --stats_per_interval=1 --use_existing_db=1 )
 
 du -s -k $data_dir
