@@ -1378,10 +1378,6 @@ class Benchmark {
     if (FLAGS_cache_size != -1)
       config << ",cache_size=" << FLAGS_cache_size;
     if (FLAGS_statistics)
-      config << ",statistics=[all,clear]";
-    else
-      // The compact operation requires statistics. Always enable them so
-      // results are consistent.
       config << ",statistics=[fast,clear]";
     if (FLAGS_disable_data_sync)
       config << ",checkpoint_sync=false";
