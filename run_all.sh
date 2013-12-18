@@ -1,10 +1,14 @@
 #!/bin/bash
 
-DATA_DIR="results"
-OPCOUNT=500000000
+DATA_DIR="/ssd1/scratch/wiredtiger/results/"
+OPCOUNT=400000000
 READCOUNT=20000000
-DATA_SIZE=200
+DATA_SIZE=180
+BLOOM_BITS=16
 ENGINE="wt"
+MSTAT=~/INSTALL/bin/mstat.py
+MSTAT_ARGS="--interval=10 --loops=1000000"
+KILL_CMD="kill -term"
 if [ "x$ENGINE" == "xwt" ]; then
 	BENCHMARK=./runners/wrun_
 	OUTDIR_PREFIX=wt
@@ -15,6 +19,12 @@ else
 	echo "Error unsupported engine $ENGINE"
 	exit 1
 fi
+
+run_fillrand=1
+run_fillseq=1
+run_overwrite=1
+run_readrand=1
+run_readrand2=0
 
 OUTDIR_BASE=bench
 
@@ -44,54 +54,116 @@ echo "" >> $OUTDIR/info
 
 echo "`df`" >> $OUTDIR/info
 
-echo "Run fill random"
-${BENCHMARK}fillrand.sh						\
-	-i $OPCOUNT -d $DATA_DIR -r $READCOUNT -s $DATA_SIZE	\
-	 > $OUTDIR/fillrand.out 2>&1 || exit 1
-if [ "x$ENGINE" == "xwt" ]; then
-	CHUNK_COUNT=`ls -l $DATA_DIR/*lsm | wc -l`
-	echo "LSM chunks: $CHUNK_COUNT" >> $OUTDIR/fillrand.out
-fi
-
-rm -rf $DATA_DIR/*
-
-echo "Run fill sequential"
-${BENCHMARK}fillseq.sh						\
-	-i $OPCOUNT -d $DATA_DIR -r $READCOUNT -s $DATA_SIZE	\
-	> $OUTDIR/fillseq.out 2>&1 || exit 1
-if [ "x$ENGINE" == "xwt" ]; then
-	CHUNK_COUNT=`ls -l $DATA_DIR/*lsm | wc -l`
-	echo "LSM chunks: $CHUNK_COUNT" >> $OUTDIR/fillseq.out
-
-	# WiredTiger deserves a compact here - RocksDB artifically loads
-	# data into a single level when doing fillseq.
-	echo "Run compact in preparation for overwrite phase"
-	${BENCHMARK}compact.sh						\
+if [ $run_fillrand != 0 ] ; then
+	echo "Run fill random"
+	if [ -e $MSTAT ]; then
+		python ~/INSTALL/bin/mstat.py > $OUTDIR/fillrand.stat 2>&1 &
+		mstat_pid=$!
+	fi
+	${BENCHMARK}fillrand.sh						\
 		-i $OPCOUNT -d $DATA_DIR -r $READCOUNT -s $DATA_SIZE	\
-		> /dev/null 2>&1 || exit 1
+		-b $BLOOM_BITS						\
+		 > $OUTDIR/fillrand.out 2>&1 || exit 1
+	if [ "x$ENGINE" == "xwt" ]; then
+		CHUNK_COUNT=`ls -l $DATA_DIR/*lsm | wc -l`
+		echo "LSM chunks: $CHUNK_COUNT" >> $OUTDIR/fillrand.out
+	fi
+	if [ -e $MSTAT ]; then
+		$KILL_CMD $mstat_pid
+	fi
+
+	rm -rf $DATA_DIR/*
 fi
 
+if [ $run_fillseq != 0 -o $run_overwrite != 0 ] ; then
+	echo "Run fill sequential"
+	if [ -e $MSTAT ]; then
+		python $MSTAT $MSTAT_ARGS > $OUTDIR/fillseq.stat 2>&1 &
+		mstat_pid=$!
+	fi
+	${BENCHMARK}fillseq.sh						\
+		-i $OPCOUNT -d $DATA_DIR -r $READCOUNT -s $DATA_SIZE	\
+		-b $BLOOM_BITS						\
+		> $OUTDIR/fillseq.out 2>&1 || exit 1
+	if [ "x$ENGINE" == "xwt" ]; then
+		CHUNK_COUNT=`ls -l $DATA_DIR/*lsm | wc -l`
+		echo "LSM chunks: $CHUNK_COUNT" >> $OUTDIR/fillseq.out
+
+		# WiredTiger deserves a compact here - RocksDB artifically loads
+		# data into a single level when doing fillseq.
+		echo "Run compact in preparation for overwrite phase"
+		${BENCHMARK}compact.sh					\
+			-i $OPCOUNT -d $DATA_DIR -r $READCOUNT -s $DATA_SIZE\
+			> /dev/null 2>&1 || exit 1
+	fi
+	if [ -e $MSTAT ]; then
+		$KILL_CMD $mstat_pid
+	fi
+fi
+
+if [ $run_overwrite != 0 ] ; then
 echo "Run overwrite"
-if [ "x$ENGINE" == "xwt" ]; then
-	CHUNK_COUNT=`ls -l $DATA_DIR/*lsm | wc -l`
-	echo "LSM chunks: $CHUNK_COUNT" >> $OUTDIR/overwrite.out
-fi
-${BENCHMARK}overwrite.sh					\
-	-i $OPCOUNT -d $DATA_DIR -r $READCOUNT -s $DATA_SIZE	\
-	>> $OUTDIR/overwrite.out 2>&1 || exit 1
-if [ "x$ENGINE" == "xwt" ]; then
-	CHUNK_COUNT=`ls -l $DATA_DIR/*lsm | wc -l`
-	echo "LSM chunks: $CHUNK_COUNT" >> $OUTDIR/overwrite.out
+	if [ -e $MSTAT ]; then
+		python $MSTAT $MSTAT_ARGS > $OUTDIR/overwrite.stat 2>&1 &
+		mstat_pid=$!
+	fi
+	if [ "x$ENGINE" == "xwt" ]; then
+		CHUNK_COUNT=`ls -l $DATA_DIR/*lsm | wc -l`
+		echo "LSM chunks: $CHUNK_COUNT" >> $OUTDIR/overwrite.out
+	fi
+	${BENCHMARK}overwrite.sh					\
+		-i $OPCOUNT -d $DATA_DIR -r $READCOUNT -s $DATA_SIZE	\
+		-b $BLOOM_BITS						\
+		>> $OUTDIR/overwrite.out 2>&1 || exit 1
+	if [ "x$ENGINE" == "xwt" ]; then
+		CHUNK_COUNT=`ls -l $DATA_DIR/*lsm | wc -l`
+		echo "LSM chunks: $CHUNK_COUNT" >> $OUTDIR/overwrite.out
+	fi
+	if [ -e $MSTAT ]; then
+		$KILL_CMD $mstat_pid
+	fi
+	rm -rf $DATA_DIR/*
 fi
 
-echo "Run read random"
-${BENCHMARK}readrand.sh						\
-	-i $OPCOUNT -d $DATA_DIR -r $READCOUNT -s $DATA_SIZE	\
-	>> $OUTDIR/readrand.out 2>&1 || exit 1
-if [ "x$ENGINE" == "xwt" ]; then
-	CHUNK_COUNT=`ls -l $DATA_DIR/*lsm | wc -l`
-	echo "LSM chunks: $CHUNK_COUNT" >> $OUTDIR/readrand.out
+if [ $run_readrand != 0 ] ; then
+	echo "Run read random"
+	if [ -e $MSTAT ]; then
+		python $MSTAT $MSTAT_ARGS > $OUTDIR/readrand.stat 2>&1 &
+		mstat_pid=$!
+	fi
+	${BENCHMARK}readrand.sh						\
+		-i $OPCOUNT -d $DATA_DIR -r $READCOUNT -s $DATA_SIZE	\
+		-b $BLOOM_BITS						\
+		>> $OUTDIR/readrand.out 2>&1 || exit 1
+	if [ "x$ENGINE" == "xwt" ]; then
+		CHUNK_COUNT=`ls -l $DATA_DIR/*lsm | wc -l`
+		echo "LSM chunks: $CHUNK_COUNT" >> $OUTDIR/readrand.out
+	fi
+	if [ -e $MSTAT ]; then
+		$KILL_CMD $mstat_pid
+	fi
+
+	rm -rf $DATA_DIR/*
 fi
 
-rm -rf $DATA_DIR/*
+if [ $run_readrand2 != 0 ] ; then
+	echo "Run complex read random"
+	if [ -e $MSTAT ]; then
+		python $MSTAT $MSTAT_ARGS > $OUTDIR/readrand2.stat 2>&1 &
+		mstat_pid=$!
+	fi
+	${BENCHMARK}readrand.sh						\
+		-i $OPCOUNT -d $DATA_DIR -r $READCOUNT -s $DATA_SIZE	\
+		-b $BLOOM_BITS -m -o 50000000 				\
+		>> $OUTDIR/readrand2.out 2>&1 || exit 1
+	if [ "x$ENGINE" == "xwt" ]; then
+		CHUNK_COUNT=`ls -l $DATA_DIR/*lsm | wc -l`
+		echo "LSM chunks: $CHUNK_COUNT" >> $OUTDIR/readrand2.out
+	fi
+	if [ -e $MSTAT ]; then
+		$KILL_CMD $mstat_pid
+	fi
+
+	rm -rf $DATA_DIR/*
+fi
 
