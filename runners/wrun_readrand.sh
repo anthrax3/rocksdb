@@ -20,6 +20,8 @@ max_compact_wait=6000
 extra_opts=--wiredtiger_table_config=lsm=(bloom_oldest=true,merge_threads=2),leaf_page_max=16k,leaf_item_max=2k
 extra_opts2=--wiredtiger_open_config=verbose=[lsm]
 add_overwrite=0
+histogram=1
+statistics=1
 
 benchmarks=readrandom
 # Not currently used by WiredTiger, but possibly interesting
@@ -52,18 +54,18 @@ while getopts "h?b:d:i:mo:r:s:" opt; do
 done
 
 echo "Load keys sequentially single threaded"
-( set -x ; ./db_bench_wiredtiger --benchmarks=fillseq --mmap_read=1 --statistics=1 --histogram=1 --num=$opcount --threads=1 --value_size=$vs --block_size=$bs --cache_size=$cs --bloom_bits=$bloom_bits --verify_checksum=1 --db=$data_dir --sync=$sync --disable_wal=$disable_wal --compression_type=none --stats_interval=$si --disable_data_sync=$dds --target_file_size_base=$mb --stats_per_interval=1 --use_existing_db=0 $extra_opts )
+( set -x ; ./db_bench_wiredtiger --benchmarks=fillseq --mmap_read=1 --statistics=$statistics --histogram=$histogram --num=$opcount --threads=1 --value_size=$vs --block_size=$bs --cache_size=$cs --bloom_bits=$bloom_bits --verify_checksum=1 --db=$data_dir --sync=$sync --disable_wal=$disable_wal --compression_type=none --stats_interval=$si --disable_data_sync=$dds --target_file_size_base=$mb --stats_per_interval=1 --use_existing_db=0 $extra_opts )
 
 echo "Allowing populated database to settle."
-( set -x ; ./db_bench_wiredtiger --benchmarks=compact --mmap_read=1 --statistics=1 --histogram=1 --num=$opcount --threads=1 --value_size=$vs --block_size=$bs --cache_size=$cs --bloom_bits=$bloom_bits --db=$data_dir --sync=$sync --disable_wal=$disable_wal --compression_type=none --stats_interval=$si --disable_data_sync=$dds --target_file_size_base=$mb --stats_per_interval=1 --use_existing_db=1 --max_compact_wait=$max_compact_wait $extra_opts $extra_opts2 )
+( set -x ; ./db_bench_wiredtiger --benchmarks=compact --mmap_read=1 --statistics=$statistics --histogram=$histogram --num=$opcount --threads=1 --value_size=$vs --block_size=$bs --cache_size=$cs --bloom_bits=$bloom_bits --db=$data_dir --sync=$sync --disable_wal=$disable_wal --compression_type=none --stats_interval=$si --disable_data_sync=$dds --target_file_size_base=$mb --stats_per_interval=1 --use_existing_db=1 --max_compact_wait=$max_compact_wait $extra_opts $extra_opts2 )
 
 if [ $add_overwrite = 1 ]; then
     echo "Overwrite some items"
-    ( set -x ; ./db_bench_wiredtiger --benchmarks=overwrite --mmap_read=1 --statistics=1 --histogram=1 --num=$overwrite_count --threads=1 --value_size=$vs --block_size=$bs --cache_size=$cs --bloom_bits=$bloom_bits --db=$data_dir --sync=$sync --disable_wal=$disable_wal --compression_type=none --stats_interval=$si --disable_data_sync=$dds --target_file_size_base=$mb --stats_per_interval=1 --use_existing_db=1 $extra_opts )
+    ( set -x ; ./db_bench_wiredtiger --benchmarks=overwrite --mmap_read=1 --statistics=$statistics --histogram=$histogram --num=$overwrite_count --threads=1 --value_size=$vs --block_size=$bs --cache_size=$cs --bloom_bits=$bloom_bits --db=$data_dir --sync=$sync --disable_wal=$disable_wal --compression_type=none --stats_interval=$si --disable_data_sync=$dds --target_file_size_base=$mb --stats_per_interval=1 --use_existing_db=1 $extra_opts )
 fi
 
 NW=$(( 8192 / $threadcount )) # Number of writes to populate memtable
 echo "Reading keys in database in random order."
-( set -x ; ./db_bench_wiredtiger --benchmarks=$benchmarks --mmap_read=1 --statistics=1 --histogram=1 --num=$opcount --reads=$readcount --writes=$NW --threads=$threadcount --value_size=$vs --block_size=$bs --cache_size=$cs --bloom_bits=$bloom_bits --db=$data_dir --sync=$sync --disable_wal=$disable_wal --compression_type=none --stats_interval=$si --disable_data_sync=$dds --target_file_size_base=$mb --stats_per_interval=1 --use_existing_db=1 $extra_opts )
+( set -x ; ./db_bench_wiredtiger --benchmarks=$benchmarks --mmap_read=1 --statistics=$statistics --histogram=$histogram --num=$opcount --reads=$readcount --writes=$NW --threads=$threadcount --value_size=$vs --block_size=$bs --cache_size=$cs --bloom_bits=$bloom_bits --db=$data_dir --sync=$sync --disable_wal=$disable_wal --compression_type=none --stats_interval=$si --disable_data_sync=$dds --target_file_size_base=$mb --stats_per_interval=1 --use_existing_db=1 $extra_opts )
 
 du -s -k $data_dir
