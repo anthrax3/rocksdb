@@ -56,16 +56,31 @@ done
 echo "Load keys sequentially single threaded"
 ( set -x ; ./db_bench_wiredtiger --benchmarks=fillseq --mmap_read=1 --statistics=$statistics --histogram=$histogram --num=$opcount --threads=1 --value_size=$vs --block_size=$bs --cache_size=$cs --bloom_bits=$bloom_bits --verify_checksum=1 --db=$data_dir --sync=$sync --disable_wal=$disable_wal --compression_type=none --stats_interval=$si --disable_data_sync=$dds --target_file_size_base=$mb --stats_per_interval=1 --use_existing_db=0 $extra_opts )
 
+CHUNK_COUNT=`ls -l $DATA_DIR/*lsm | wc -l`
+DATA_SZ=`du -sk $data_dir`
+echo "After sequential load. LSM chunks: $CHUNK_COUNT data size: $DATA_SZ"
+
 echo "Allowing populated database to settle."
 ( set -x ; ./db_bench_wiredtiger --benchmarks=compact --mmap_read=1 --statistics=$statistics --histogram=$histogram --num=$opcount --threads=1 --value_size=$vs --block_size=$bs --cache_size=$cs --bloom_bits=$bloom_bits --db=$data_dir --sync=$sync --disable_wal=$disable_wal --compression_type=none --stats_interval=$si --disable_data_sync=$dds --target_file_size_base=$mb --stats_per_interval=1 --use_existing_db=1 --max_compact_wait=$max_compact_wait $extra_opts $extra_opts2 )
+
+CHUNK_COUNT=`ls -l $DATA_DIR/*lsm | wc -l`
+DATA_SZ=`du -sk $data_dir`
+echo "After compact. LSM chunks: $CHUNK_COUNT data size: $DATA_SZ"
 
 if [ $add_overwrite = 1 ]; then
     echo "Overwrite some items"
     ( set -x ; ./db_bench_wiredtiger --benchmarks=overwrite --mmap_read=1 --statistics=$statistics --histogram=$histogram --num=$overwrite_count --threads=1 --value_size=$vs --block_size=$bs --cache_size=$cs --bloom_bits=$bloom_bits --db=$data_dir --sync=$sync --disable_wal=$disable_wal --compression_type=none --stats_interval=$si --disable_data_sync=$dds --target_file_size_base=$mb --stats_per_interval=1 --use_existing_db=1 $extra_opts )
+
+	CHUNK_COUNT=`ls -l $DATA_DIR/*lsm | wc -l`
+	DATA_SZ=`du -sk $data_dir`
+	echo "After overwrite LSM chunks: $CHUNK_COUNT data size: $DATA_SZ"
 fi
 
 NW=$(( 8192 / $threadcount )) # Number of writes to populate memtable
 echo "Reading keys in database in random order."
 ( set -x ; ./db_bench_wiredtiger --benchmarks=$benchmarks --mmap_read=1 --statistics=$statistics --histogram=$histogram --num=$opcount --reads=$readcount --writes=$NW --threads=$threadcount --value_size=$vs --block_size=$bs --cache_size=$cs --bloom_bits=$bloom_bits --db=$data_dir --sync=$sync --disable_wal=$disable_wal --compression_type=none --stats_interval=$si --disable_data_sync=$dds --target_file_size_base=$mb --stats_per_interval=1 --use_existing_db=1 $extra_opts )
 
+CHUNK_COUNT=`ls -l $DATA_DIR/*lsm | wc -l`
+DATA_SZ=`du -sk $data_dir`
+echo "After read. LSM chunks: $CHUNK_COUNT data size: $DATA_SZ"
 du -s -k $data_dir
