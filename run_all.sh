@@ -1,6 +1,6 @@
 #!/bin/bash
 
-DATA_DIR="/ssd1/scratch/wiredtiger/results/"
+DATA_DIR="results"
 OPCOUNT=400000000
 READCOUNT=20000000
 DATA_SIZE=180
@@ -24,7 +24,7 @@ run_fillrand=1
 run_fillseq=1
 run_overwrite=1
 run_readrand=1
-run_readrand2=0
+run_readrand2=1
 
 OUTDIR_BASE=bench
 

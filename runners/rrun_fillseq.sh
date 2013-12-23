@@ -2,7 +2,7 @@
 
 # Configurations shared by RocksDB and WiredTiger
 mb=67108864	# chunk_size
-dds=1		# Disable data sync
+dds=0		# Disable data sync
 sync=0		# Sync writes
 opcount=50000000
 readcount=1000000
@@ -25,7 +25,7 @@ ctrig=4
 delay=8
 stop=12
 wbn=3
-mbc=20
+mbc=10
 wbs=134217728
 of=500000
 si=1000000

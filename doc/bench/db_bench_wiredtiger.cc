@@ -402,6 +402,9 @@ DEFINE_bool(filter_deletes, false, " On true, deletes use bloom-filter and drop"
             " the delete if key not present");
 
 // WiredTiger specific configuration options.
+DEFINE_string(isolation, "none",
+              "Transaction isolation level to use for WiredTiger.");
+
 DEFINE_bool(use_lsm, true, "Create LSM trees, not btrees");
 
 DEFINE_int32(max_compact_wait, 1200,
@@ -703,10 +706,10 @@ struct ThreadState {
   SharedState* shared;
   WT_SESSION *session;
 
-  /* implicit */ ThreadState(int index, WT_CONNECTION *conn)
+  ThreadState(int index, WT_CONNECTION *conn, const char *session_config)
       : tid(index),
         rand((FLAGS_seed ? FLAGS_seed : 1000) + index) {
-    conn->open_session(conn, NULL, NULL, &session);
+    conn->open_session(conn, NULL, session_config, &session);
     assert(session != NULL);
   }
   ~ThreadState() {
@@ -751,6 +754,7 @@ class Benchmark {
  private:
   WT_CONNECTION *conn_;
   std::string uri_;
+  const char *session_config_;
   int db_num_;
 
   bool sync_;
@@ -848,7 +852,8 @@ class Benchmark {
 
  public:
   Benchmark()
-   :db_num_(0),
+   :session_config_(NULL),
+    db_num_(0),
     num_(FLAGS_num),
     value_size_(FLAGS_value_size),
     key_size_(FLAGS_key_size),
@@ -1101,7 +1106,7 @@ class Benchmark {
       arg[i].bm = this;
       arg[i].method = method;
       arg[i].shared = &shared;
-      arg[i].thread = new ThreadState(i, conn_);
+      arg[i].thread = new ThreadState(i, conn_, session_config_);
       arg[i].thread->shared = &shared;
       Env::Default()->StartThread(ThreadBody, &arg[i]);
     }
@@ -1372,6 +1377,19 @@ class Benchmark {
     config.str("");
     table_config.str("");
 
+    if (strncmp(FLAGS_isolation.c_str(), "snapshot", strlen("snapshot")) == 0)
+      session_config_ = "isolation=snapshot";
+    else if (strncmp(FLAGS_isolation.c_str(),
+             "read_committed", strlen("read_committed")) == 0)
+      session_config_ = "isolation=read-committed";
+    else if (strncmp(FLAGS_isolation.c_str(),
+             "read_uncommitted", strlen("read_uncommitted")) == 0)
+      session_config_ = "isolation=read-uncommitted";
+    else if (strncmp(FLAGS_isolation.c_str(), "none", strlen("none")) != 0) {
+      fprintf(stderr, "Error: Unsupported isolation level: %s\n",
+        FLAGS_isolation.c_str());
+      exit(1);
+    }
     // Setup WiredTiger open options
     if (!FLAGS_use_existing_db)
       config << "create";
@@ -1383,6 +1401,8 @@ class Benchmark {
       config << ",checkpoint_sync=false";
     if (FLAGS_use_fsync)
       config << ",transaction_sync=fsync";
+    if (!sync_)
+      config << ",transaction_sync=none";
     if (strncmp(FLAGS_compression_type.c_str(),
        "snappy", strlen("snappy")) == 0) {
       config << ",extensions=[libwiredtiger_snappy.so]";
@@ -1420,7 +1440,7 @@ class Benchmark {
     table_config << ",key_format=S,value_format=S";
     if (FLAGS_use_lsm) {
       table_config << ",type=lsm";
-      table_config << ",prefix_compression=false";
+      //table_config << ",prefix_compression=false";
       table_config << ",leaf_page_max=16kb";
       table_config << ",leaf_item_max=2kb";
       table_config << ",lsm=(";
@@ -1454,7 +1474,8 @@ class Benchmark {
       FLAGS_db.c_str(), config.str().c_str());
 
     WT_SESSION *session;
-    if ((ret = conn_->open_session(conn_, NULL, NULL, &session)) != 0) {
+    if ((ret = conn_->open_session(
+      conn_, NULL, session_config_, &session)) != 0) {
       fprintf(stderr,
         "Error: Failed open_session: %s\n", wiredtiger_strerror(ret));
       exit(1);
@@ -1505,20 +1526,13 @@ class Benchmark {
       snprintf(msg, sizeof(msg), "(%lld ops)", num_);
       thread->stats.AddMessage(msg);
     }
-    std::stringstream txn_config;
-    txn_config.str("");
-    txn_config << "isolation=snapshot";
-    if (sync_)
-        txn_config << ",sync=full";
-    else
-        txn_config << ",sync=none";
 
     WT_CURSOR *cursor;
     std::stringstream cur_config;
     cur_config.str("");
     cur_config << "overwrite";
     if (write_mode == SEQUENTIAL && FLAGS_threads == 1)
-  cur_config << ",bulk=true";
+    cur_config << ",bulk=true";
 
     int ret = thread->session->open_cursor(
       thread->session, uri_.c_str(), NULL, cur_config.str().c_str(), &cursor);
@@ -1878,13 +1892,6 @@ class Benchmark {
       fprintf(stderr, "open_cursor error: %s\n", wiredtiger_strerror(ret));
       exit(1);
     }
-    std::stringstream txn_config;
-    txn_config.str("");
-    txn_config << "isolation=snapshot";
-    if (sync_)
-      txn_config << ",sync=full";
-    else
-      txn_config << ",sync=none";
     Duration duration(seq ? 0 : FLAGS_duration, num_);
     char key[100];
     long i = 0;

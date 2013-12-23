@@ -2,7 +2,7 @@
 
 echo "Running manual compaction ...."
 mb=67108864	# chunk_size
-dds=1		# Disable data sync
+dds=0		# Disable data sync
 sync=0		# Sync writes
 opcount=50000000
 readcount=1000000
