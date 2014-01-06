@@ -854,6 +854,7 @@ class Benchmark {
   Benchmark()
    :session_config_(NULL),
     db_num_(0),
+    sync_(FLAGS_sync),
     num_(FLAGS_num),
     value_size_(FLAGS_value_size),
     key_size_(FLAGS_key_size),
