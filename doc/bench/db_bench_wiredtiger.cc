@@ -1944,9 +1944,6 @@ class Benchmark {
   }
 
   void ReadWhileWriting(ThreadState* thread) {
-    fprintf(stderr, "ReadWhileWriting not implemented.\n");
-    exit (1);
-#if 0
     if (thread->tid > 0) {
       ReadRandom(thread);
     } else {
@@ -1965,6 +1962,19 @@ class Benchmark {
       // Don't merge stats from this thread with the readers.
       thread->stats.SetExcludeFromMerge();
 
+      WT_CURSOR *cursor;
+      std::stringstream cur_config;
+      cur_config.str("");
+      cur_config << "overwrite";
+
+      int ret = thread->session->open_cursor(
+        thread->session, uri_.c_str(), NULL, cur_config.str().c_str(), &cursor);
+      if (ret != 0) {
+        fprintf(stderr, "open_cursor error: %s\n", wiredtiger_strerror(ret));
+        exit(1);
+      }
+
+      char key[100];
       while (true) {
         {
           MutexLock l(&thread->shared->mu);
@@ -1974,15 +1984,19 @@ class Benchmark {
           }
         }
 
-        const long long k = thread->rand.Next() % FLAGS_num;
-        unique_ptr<char []> key = GenerateKeyFromInt(k);
-        Status s = db_->Put(write_options_, key.get(),
-                            gen.Generate(value_size_));
-        if (!s.ok()) {
-          fprintf(stderr, "put error: %s\n", s.ToString().c_str());
+        long long k;
+        while (!(k = thread->rand.Next() % FLAGS_num)) // no 0 keys for WT
+          ;
+        snprintf(key, sizeof(key), "%016lld", k);
+        cursor->set_key(cursor, key);
+        std::string value = gen.Generate(value_size_).ToString();
+        cursor->set_value(cursor, value.c_str());
+        int ret = cursor->insert(cursor);
+        if (ret != 0) {
+          fprintf(stderr, "insert error: %s\n", wiredtiger_strerror(ret));
           exit(1);
         }
-        thread->stats.FinishedSingleOp(db_);
+        thread->stats.FinishedSingleOp(nullptr);
 
         ++num_writes;
         if (writes_per_second_by_10 && num_writes >= writes_per_second_by_10) {
@@ -1998,8 +2012,8 @@ class Benchmark {
           }
         }
       }
+      cursor->close(cursor);
     }
-#endif
   }
 
   // Given a key K and value V, this puts (K+"0", V), (K+"1", V), (K+"2", V)
