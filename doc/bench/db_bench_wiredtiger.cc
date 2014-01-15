@@ -60,6 +60,7 @@ DEFINE_string(benchmarks,
               "compact,"
               "readrandom,"
               "readseq,"
+              "readtocache,"
               "readreverse,"
               "readwhilewriting,"
               "readrandomwriterandom,"
@@ -212,6 +213,8 @@ DEFINE_int32(open_files, 0,
 
 DEFINE_int32(bloom_bits, -1, "Bloom filter bits per key. Negative means"
              " use default settings.");
+
+DEFINE_bool(bloom_oldest, false, "Create bloom filter on oldest LSM file");
 
 DEFINE_bool(use_existing_db, false, "If true, do not destroy the existing"
             " database.  If you set this flag and also specify a benchmark that"
@@ -958,6 +961,10 @@ class Benchmark {
         method = &Benchmark::WriteRandom;
       } else if (name == Slice("readseq")) {
         method = &Benchmark::ReadSequential;
+      } else if (name == Slice("readtocache")) {
+        method = &Benchmark::ReadSequential;
+        num_threads = 1;
+        reads_ = num_;
       } else if (name == Slice("readreverse")) {
         method = &Benchmark::ReadReverse;
       } else if (name == Slice("readrandom")) {
@@ -1354,7 +1361,6 @@ class Benchmark {
       config_error = 1;
     }
     if (FLAGS_merge_operator != "" || FLAGS_universal_size_ratio ||
-      FLAGS_universal_min_merge_width || FLAGS_universal_max_merge_width ||
       FLAGS_universal_max_size_amplification_percent) {
       fprintf(stderr, "Error: merge_operator not supported by WiredTiger\n");
       config_error = 1;
@@ -1447,6 +1453,12 @@ class Benchmark {
       table_config << ",lsm=(";
       table_config << "chunk_size=20MB";
       table_config << ",chunk_max=100GB";
+      if (FLAGS_universal_max_merge_width > 1)
+        table_config << ",merge_max=" << FLAGS_universal_max_merge_width;
+      if (FLAGS_universal_min_merge_width > 1)
+        table_config << ",merge_min=" << FLAGS_universal_min_merge_width;
+      if (FLAGS_bloom_oldest)
+        table_config << ",bloom_oldest=true";
       if (FLAGS_bloom_bits > 0)
         table_config << ",bloom_bit_count=" << FLAGS_bloom_bits;
       if (FLAGS_bloom_bits > 4)
@@ -1462,6 +1474,9 @@ class Benchmark {
     // Add user configuration to the end - so it overrides other values.
     config << "," << FLAGS_wiredtiger_open_config;
     table_config << "," << FLAGS_wiredtiger_table_config;
+
+    fprintf(stderr, "config:: %s\n", config.str().c_str());
+    fprintf(stderr, "table config:: %s\n", table_config.str().c_str());
 
     int ret;
     Env::Default()->CreateDir(FLAGS_db);
